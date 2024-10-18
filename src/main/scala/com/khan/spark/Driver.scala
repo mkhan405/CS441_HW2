@@ -10,6 +10,9 @@ import org.slf4j.{Logger, LoggerFactory}
 object Driver {
   def main(args:Array[String] ): Unit = {
     val conf: SparkConf = new SparkConf().setAppName("CS 411 HW2").setMaster("local[*]")
+
+    conf.set("embeddingFilename", "input/embeddings.csv")
+
     val sparkContext: SparkContext = new SparkContext(conf)
     val logger: Logger = LoggerFactory.getLogger("Driver")
     logger.info("Driver Started...")

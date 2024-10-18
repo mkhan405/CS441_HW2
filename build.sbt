@@ -22,8 +22,8 @@ ThisBuild / assemblyMergeStrategy := {
 resolvers += "Maven Repository" at "https://mvnrepository.com/artifact"
 
 libraryDependencies ++= Seq(
-  "org.apache.spark" %% "spark-sql" % "3.5.2" % (if (isProd) "provided" else "compiled") exclude("org.apache.logging.log4j", "log4j-slf4j-impl"),
-  "org.apache.spark" %% "spark-core" % "3.5.2" % (if (isProd) "provided" else "compiled") exclude("org.apache.logging.log4j", "log4j-slf4j-impl")
+  "org.apache.spark" %% "spark-sql" % "3.5.2", // % (if (isProd) "provided" else "compiled") exclude("org.apache.logging.log4j", "log4j-slf4j-impl"),
+  "org.apache.spark" %% "spark-core" % "3.5.2" // % (if (isProd) "provided" else "compiled") exclude("org.apache.logging.log4j", "log4j-slf4j-impl")
 )
 
 // Configuration dependencies
