@@ -213,4 +213,27 @@ computed prior to this process:
 The index is then used to generate a one-hot encoded label of size `vocabSize`, where the position with `1` indicates which token has been predicted. In this example, "def" is the second
 item in the vocabulary, hence why the label has a 1 at index 1. 
 
+### Training the Neural Network
+
+The neural network comprises of the following layers:
+- Input Layer (Input Dimensions: embeddingSize * windowSize, Output Dimensions: 256)
+- Hidden Layer (Dimensions: 256)
+- Output Layer (Input Dimensions: 256, Output Dimensions: VocabSize)
+
+The hidden layer utilizes the RELU activation function while the output layer uses the SOFTMAX Activation Function. The Multi-Class Cross Entropy Loss Function is utilized on the output layer.
+
+The `ParameterAveragingTrainingMastger` by DeepLearning4j is utilized to train and fit the model in a distributed fashion. Here are some of the relevant configuration parameters for training:
+- Batch Size: 10
+- Epochs: 50
+- Learning Rate: 0.01
+- Hidden Layer Size: 128
+- Number of Workers: 32
+- Average Frequency: 10
+- Vocabulary Size: 1034
+
+### Model Performance
+
+To train and effectively test the model, an 80/20 split was performed to generate a train and test dataset to evaluate the model performance for every epoch. Below are some of the relevant statistics
+regarding the model performance:
+
 
