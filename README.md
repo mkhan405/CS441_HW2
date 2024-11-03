@@ -177,5 +177,30 @@ In summary, every line from the original `tokenizedRDD` is now transformed to th
                       ]
 ```
 
-### Embedding Input Features and Generating Output Features
+### Embedding Input Features and Generating Output Labels
+
+With the Input/Target Pairs now generated, we need to embed the input features and generate the output labels. The first step in this process is to map over all the sliding windows 
+previously computed and extract a list of inputs and outputs:
+
+```
+[
+    [
+      ([305, 130, 927, ...], 234),          => Inputs = [[305, 130, 927, ...], [130, 927, ...]], Outputs = [234, 145, ...]
+      ....
+    ],
+    ...
+
+]
+```
+
+#### Embedding Input Features
+
+Each token in the input sequences is mapped to a 128-dimensional embedding vector, with a corresponding vector of zero's in the case the token is not found. These results are then flat mapped and result in a vector of length `windowSize * embeddingDim`
+
+```
+[305, 130, 927, ...] => [[132.4, ..., 0], [532.4, ..., 0], ... ] => [1.00, 43.0, ...., 423.3]
+```
+
+#### Generating Output Features
+
 
