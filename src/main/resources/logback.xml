@@ -5,6 +5,24 @@
         </encoder>
     </appender>
 
+<!--    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">-->
+<!--        <file>dl4j-training.log</file>-->
+<!--        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">-->
+<!--            <fileNamePattern>dl4j-training.%d{yyyy-MM-dd}.log</fileNamePattern>-->
+<!--            <maxHistory>30</maxHistory>-->
+<!--            <totalSizeCap>3GB</totalSizeCap>-->
+<!--        </rollingPolicy>-->
+<!--        <encoder>-->
+<!--            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>-->
+<!--        </encoder>-->
+<!--    </appender>-->
+
+<!--    &lt;!&ndash; DL4J specific loggers &ndash;&gt;-->
+<!--    <logger name="org.deeplearning4j" level="DEBUG"/>-->
+<!--    <logger name="org.deeplearning4j.optimize.listeners" level="DEBUG"/>-->
+<!--    <logger name="org.deeplearning4j.optimize.listeners.ScoreIterationListener" level="DEBUG"/>-->
+<!--    <logger name="org.deeplearning4j.ui" level="INFO"/>-->
+
     <root level="debug">
         <appender-ref ref="STDOUT" />
     </root>

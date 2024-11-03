@@ -1,105 +1,43 @@
 package com.khan.spark.SlidingWindows
 
-import com.khan.spark.Embeddings.EmbeddingInstance
-import com.khan.spark.utils.io.getResourcePath
-import com.khan.spark.utils.EncodingData._
-import com.knuddels.jtokkit.api.IntArrayList
+import com.khan.spark.Embeddings.EmbeddingsCompute._
+
+import com.khan.spark.Training.AppConfig
 import org.apache.spark._
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd._
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.types.{ArrayType, StringType, StructField, StructType}
 import org.nd4j.linalg.api.ndarray.INDArray
 import org.nd4j.linalg.dataset.DataSet
 import org.nd4j.linalg.factory.Nd4j
 import org.slf4j.{Logger, LoggerFactory}
+import org.apache.hadoop.fs.{FileSystem, Path}
+import java.net.URI
+
 import scala.collection.Map
 
-import scala.collection.mutable.ArrayBuffer
-
 object Compute {
-
-  private val embeddingSchema = StructType(
-    Array(
-      StructField("name", StringType),
-      StructField("embedding", ArrayType(StringType)) // Assuming embeddings are float arrays
-    )
-  )
-
   val logger: Logger = LoggerFactory.getLogger("SlidingWindowCompute")
 
-  private def splitAndTokenize(str: String): String = {
-    str.split(" ").map(t => encoding.encode(t)).map(bpe => bpe.toArray).map(_.mkString(" ")).mkString(" ")
-  }
+  private def generateSlidingWindows(sc: SparkContext, tokenizedRDD: RDD[String], tokenToEmbeddingBroadcast:
+    Broadcast[Map[String, Array[Float]]], windowSize: Int, stride: Int, embeddingDim: Int, padToken: String,
+    vocabSize: Long, tokenToIndexBroadcast: Broadcast[Map[String, Long]]) = {
 
-  private def initializeEmbeddings(embeddingPath: String): (RDD[(String, Array[Float])], RDD[(Array[Float], String)]) = {
-    val spark = SparkSession.builder.appName("Simple Application")
-      .config("spark.master", "local")
-      .config("spark.driver.bindAddress", "127.0.0.1")
-      .master("local[*]")
-      .getOrCreate()
-
-
-      val dfRdd = spark.read.format("csv")
-        //.schema(embeddingSchema)
-        .option("header", "true") //first line in file has headers
-        .option("inferSchema", "true") //first line in file has headers
-        .load(embeddingPath)
-        .rdd
-
-      // Parse Embedding CSV Data
-      val embeddingRdd = dfRdd.map(r => new EmbeddingInstance(r.get(0).toString, r.get(1).
-        toString.split(";").map(_.toFloat)))
-
-      // Generate token -> embedding and embedding -> token maps
-      val tokenToEmbeddingRDD = embeddingRdd.map(i => (i.token, i.vector))
-      val embeddingToTokenRDD = embeddingRdd.map(i => (i.vector, i.token))
-
-      (tokenToEmbeddingRDD, embeddingToTokenRDD)
-  }
-
-  private def generatePositionalEmbedding(tokens: Array[String], windowSize: Int, embeddingDim: Int): INDArray = {
-    val result: INDArray = Nd4j.zeros(windowSize, embeddingDim)
-    (0 until windowSize).foreach(pos => {
-      (0 until embeddingDim by 2).foreach(i => {
-        val angle: Double = pos / Math.pow(10000, (2.0 * i) / embeddingDim)
-        result.putScalar(Array(pos, i), Math.sin(angle))
-        if (i + 1 < embeddingDim)
-          result.putScalar(Array(pos, i + 1), Math.cos(angle))
-      })
-    })
-    result
-  }
-
-  private def generateEmbedding(tokens: Array[String], tokenToEmbeddingRDD:Broadcast[Map[String, Array[Float]]],
-                                embeddingDim: Int): INDArray = {
-
-    // Convert string of Integer Token IDs -> IntArrayList
-    val intTokens = new IntArrayList()
-    tokens.foreach(t => intTokens.add(t.toInt))
-
-    // For each decoded integer ID, generate embedding
-    val embeddings: Array[Float] = encoding.decode(intTokens).split(" ").flatMap(w => {
-      tokenToEmbeddingRDD.value.getOrElse(w, Array.fill(embeddingDim)(0.0f))
-    })
-
-    Nd4j.create(embeddings)
-  }
-
-  private def generateSlidingWindows(sc: SparkContext, tokenizedRDD: RDD[String], tokenToEmbeddingRDD: RDD[(String, Array[Float])],
-         windowSize: Int, stride: Int, embeddingDim: Int, padToken: String) = {
-
-    val tokenToEmbeddingBroadcast = sc.broadcast(tokenToEmbeddingRDD.collectAsMap())
-
+    // Generate Input/Target Pairs for each tokenized line of text
     val samples = tokenizedRDD.map(line => {
-      logger.debug(s"Computing Line: ${line}")
-      line.split(" ").sliding(windowSize + 1, stride).map(s => (s.slice(0, s.length - 1) ++ Array.fill(windowSize
+      // If input length is less than the window size, pad the remaining space
+      val windows = line.split(" ").sliding(windowSize + 1, stride).map(s => (s.slice(0, s.length - 1) ++ Array.fill(windowSize
         - s.length + 1)(padToken), s.last)).toArray
+      logger.debug(s"Total window for line: ${windows.length}")
+      windows
     })
 
+    logger.info(s"Total sliding windows: ${samples.map(_.length).sum()}")
+
+    // Extract list of inputs and targets
     val inputs = samples.map(S => S.map(s => s._1))
     val outputs = samples.map(S => S.map(s => s._2))
 
+    // For each input, compute the positional and token embeddings
     val inputsWithPositionalEmbedding = inputs.map(in => {
       in.map(window => {
         val posEmbedding: INDArray = generatePositionalEmbedding(window, windowSize, embeddingDim)
@@ -108,50 +46,62 @@ object Compute {
       })
     })
 
-    val outputEmbeddings = outputs.map(_.map(o => generateEmbedding(Array(o), tokenToEmbeddingBroadcast, embeddingDim)))
+    // For each target, generate one-hot encodings
+    val outputEmbeddings = outputs.map(_.map(o => {
+      // Retrieve the index of the token ID from the vocabulary
+      val l: Long = tokenToIndexBroadcast.value.getOrElse(o, -1)
+
+      // If not found, set label to list of zeros
+      // Otherwise, set a 1 at the corresponding token index
+      if (l == -1) {
+        Nd4j.zeros(1, vocabSize)
+      } else {
+        val result = Nd4j.zeros(1, vocabSize)
+        result.putScalar(0, l, 1.0)
+        result
+      }
+    }))
+
+    // Return dataset object with the
     inputsWithPositionalEmbedding.zip(outputEmbeddings).flatMap(T => {
-      T._1.zip(T._2).map(t => new DataSet(t._1, t._2))
+      T._1.zip(T._2).map(t => new DataSet(t._1.reshape(1, embeddingDim * windowSize), t._2))
     })
   }
 
 
-  def computeSlidingWindows(sc: SparkContext): Unit = {
-    // Read Input Text from File
-    val inputFilename = s"/${sc.getConf.get("inputFilename", "inputs/input.txt")}"
-    val inputFilePath = getResourcePath(inputFilename)
-    // Read Embeddings from CSV
-    val embeddingsFilename = s"/${sc.getConf.get("embeddingFilename", "inputs/embeddings.csv")}"
-    val embeddingPath = getResourcePath(embeddingsFilename)
+  def computeSlidingWindows(sc: SparkContext, config: AppConfig, tokenToIndexRDD: RDD[(String, Long)],
+                            tokenToEmbeddingBroadcast:  Broadcast[Map[String, Array[Float]]]): RDD[DataSet] = {
 
-    if (inputFilePath == null || embeddingPath == null) {
-      val missingFilename = if (inputFilePath.equals(null)) inputFilename else embeddingsFilename
-      logger.error(s"File: ${missingFilename} cannot be opened")
-      return
-    }
+    // Read Input Text from File
+    // val textInputPath = getFilePath(sc.getConf.get("inputFilename", "inputs/input.txt"))
+    val textInputPath = new Path(config.fileConfig.baseDir, config.fileConfig.inputTextPath).toString
 
     // Convert Text File to RDD
-    val inputRDD: RDD[String] = sc.textFile(inputFilePath)
-    val tokenizedRDD: RDD[String] = inputRDD.map(s => splitAndTokenize(s))
+    val linesPerGroup = 10  // Number of lines to combine into one string
+    val inputRDD: RDD[String] = sc.textFile(textInputPath)
+
+    val groupedRDD: RDD[String] = inputRDD
+      .zipWithIndex()  // Add indices to track line numbers
+      .map { case (line, idx) => (idx / linesPerGroup, line) }  // Group by every N lines
+      .groupByKey()  // Group the lines together
+      .map { case (_, lines) => lines.mkString("\n") }  // Combine lines with newline separator
+
+    val tokenizedRDD: RDD[String] = groupedRDD.map(s => splitAndTokenize(s))
     logger.info("Tokenized Output Computed")
+
     // logger.debug(s"Tokenized Output: ${tokenizedRDD.collect().mkString(",")}")
-    
-    // Load Embeddings and generate maps
-    val (tokenToEmbeddingRDD, embeddingToTokenRDD) = initializeEmbeddings(embeddingPath)
-    logger.info("Embedding RDD Computed")
+    // Token to Index Broadcast
+    val tokenToIndexBroadcast = sc.broadcast(tokenToIndexRDD.collectAsMap())
 
-    // Loading Training Configuration Parameters
-    val windowSize: Int = sc.getConf.get("windowSize", "20").toInt
-    val stride: Int = sc.getConf.get("stride", "3").toInt
-    val padToken: String = sc.getConf.get("pad_token", "0")
-    val embeddingDim: Int = sc.getConf.get("embeddingDim", "128").toInt
-
-    val dataset = generateSlidingWindows(sc, tokenizedRDD, tokenToEmbeddingRDD, windowSize, stride, embeddingDim, padToken)
+    val dataset = generateSlidingWindows(sc, tokenizedRDD, tokenToEmbeddingBroadcast, config.windowSize, config.stride,
+      config.embeddingDim, config.padToken, config.vocabSize, tokenToIndexBroadcast)
     val collectedDataset = dataset.collect()
 
-    logger.debug(s"DataSet Head Features: ${collectedDataset.head.getFeatures.length()}")
-    logger.debug(s"DataSet Head Label: ${collectedDataset.head.getLabels.length()}")
+    logger.debug(s"DataSet Head Features: ${collectedDataset.head.getFeatures.shape.mkString(",")}")
+    logger.debug(s"DataSet Head Label: ${collectedDataset.head.getLabels.shape().mkString(",")}")
 
-    logger.info(s"If head features are of correct length: ${collectedDataset.forall(d => d.getFeatures.length() == 2560)}")
-    logger.info(s"If head labels are of correct length: ${collectedDataset.forall(d => d.getLabels.length() == 128)}")
+    logger.debug(s"First sliding window label: ${collectedDataset.head.getFeatures.getRow(0).toDoubleVector.mkString("Array(", ", ", ")")}")
+    logger.debug(s"Total number processed: ${collectedDataset.length}")
+    dataset
   }
 }

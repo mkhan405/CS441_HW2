@@ -1,44 +1,43 @@
 package com.khan.spark
 
-import org.apache.spark.sql.SparkSession
+import com.khan.spark.Training.AppConfig
 import com.khan.spark.SlidingWindows.Compute._
+import com.khan.spark.Embeddings.EmbeddingLoader._
+import com.khan.spark.Training.Transformer._
+import com.khan.spark.utils.io.configureFileSystem
 import com.typesafe.config.ConfigFactory
 import org.apache.spark._
+import org.nd4j.linalg.factory.Nd4j
 import org.slf4j.{Logger, LoggerFactory}
 
+import org.apache.hadoop.fs.FileSystem
+
 object Driver {
-  def main(args:Array[String] ): Unit = {
+  def main(args: Array[String]): Unit = {
     val conf: SparkConf = new SparkConf().setAppName("CS 411 HW2").setMaster("local[*]")
-    val applicationConfig = ConfigFactory.load().resolve()
+    val config = AppConfig.load()
 
-    // Setting Input File Paths
-    conf.set("inputFilename", s"${applicationConfig.getString("training-conf.inputFilePath")}")
-    conf.set("embeddingFilename", s"${applicationConfig.getString("training-conf.embeddingFilePath")}")
-    // Setting sliding window parameters
-    conf.set("embeddingDim", s"${applicationConfig.getInt("training-conf.embeddingDim")}")
-    conf.set("windowSize", s"${applicationConfig.getInt("window-conf.size")}")
-    conf.set("stride", s"${applicationConfig.getInt("window-conf.stride")}")
-    conf.set("pad_token", s"${applicationConfig.getInt("window-conf.pad_token")}")
-
+    // Set Training Config
     val sparkContext: SparkContext = new SparkContext(conf)
+    val fs: FileSystem = configureFileSystem(sparkContext, config.padToken)
+
     val logger: Logger = LoggerFactory.getLogger("Driver")
     logger.info("Driver Started...")
 
-    computeSlidingWindows(sparkContext)
+    val (tokenToEmbeddingRDD, embeddingToTokenRDD, indexToIndexRDD, tokenToIndexRDD) =
+      loadEmbeddings(sparkContext, config)
 
+    logger.info("Embedding RDD Computed")
+    // Report Spark Statistics
+    logger.info(s"Number of Executors: ${sparkContext.getExecutorMemoryStatus.size}")
+
+    val tokenToEmbeddingBroadcast = sparkContext.broadcast(tokenToEmbeddingRDD.collectAsMap())
+    val indexToTokenBroadcast = sparkContext.broadcast(indexToIndexRDD.collectAsMap())
+    val dataset = computeSlidingWindows(sparkContext, config, tokenToIndexRDD, tokenToEmbeddingBroadcast)
+    val model = train(sparkContext, fs, config, dataset)
+
+    val output = predict(model, "serve power", config, tokenToEmbeddingBroadcast, indexToTokenBroadcast)
+    logger.debug(s"Prediction Output: ${output}")
     sparkContext.stop()
   }
 }
-
-
-//    val spark = SparkSession.builder.appName("Simple Application")
-//      .config("spark.master", "local").getOrCreate()
-//
-//    val logger: Logger = LoggerFactory.getLogger("Main Program")
-//
-//    val resourcePath = getResourcePath("/README.md")
-//    val logData = spark.read.textFile(resourcePath).cache()
-//    val numAs = logData.filter(line => line.contains("a")).count()
-//    val numBs = logData.filter(line => line.contains("b")).count()
-//    logger.info(s"Lines with a: $numAs, Lines with b: $numBs")
-//    spark.stop()

@@ -22,8 +22,9 @@ ThisBuild / assemblyMergeStrategy := {
 resolvers += "Maven Repository" at "https://mvnrepository.com/artifact"
 
 libraryDependencies ++= Seq(
-  "org.apache.spark" %% "spark-sql" % "3.5.2", // % (if (isProd) "provided" else "compiled") exclude("org.apache.logging.log4j", "log4j-slf4j-impl"),
-  "org.apache.spark" %% "spark-core" % "3.5.2" // % (if (isProd) "provided" else "compiled") exclude("org.apache.logging.log4j", "log4j-slf4j-impl")
+  "org.apache.spark" %% "spark-sql" % "3.5.1", // % (if (isProd) "provided" else "compiled") exclude("org.apache.logging.log4j", "log4j-slf4j-impl"),
+  "org.apache.spark" %% "spark-core" % "3.5.1", // % (if (isProd) "provided" else "compiled") exclude("org.apache.logging.log4j", "log4j-slf4j-impl")
+  "org.apache.spark" %% "spark-mllib" % "3.5.1"
 )
 
 // Configuration dependencies
@@ -34,12 +35,16 @@ libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.19" % Test
 
 libraryDependencies ++= Seq(
   "ch.qos.logback" % "logback-classic" % "1.5.9",  // Logback dependency
-  "org.slf4j" % "slf4j-api" % "2.0.12",             // SLF4J dependency
-  "org.slf4j" % "slf4j-log4j12" % "2.0.13"          // Log4j to SLF4J bridge
+  "org.slf4j" % "slf4j-api" % "2.0.12"             // SLF4J dependency
+  //  "org.slf4j" % "slf4j-log4j12" % "2.0.13"          // Log4j to SLF4J bridge
 )
 
 // Deep learning dependencies
 libraryDependencies += "com.knuddels" % "jtokkit" % "1.1.0"
 libraryDependencies += "org.deeplearning4j" % "deeplearning4j-core" % "1.0.0-M2.1"
+// libraryDependencies += "org.deeplearning4j" % "deeplearning4j-scaleout-api" % "1.0"
 libraryDependencies += "org.deeplearning4j" % "deeplearning4j-nlp" % "1.0.0-M2.1"
+libraryDependencies += "org.deeplearning4j" %% "dl4j-spark" % "1.0.0-M2.1"
+libraryDependencies += "org.deeplearning4j" % "deeplearning4j-nn" % "0.9.1"
 libraryDependencies += "org.nd4j" % "nd4j-native-platform" % "1.0.0-M2.1"
+// libraryDependencies += "org.deeplearning4j" % "deeplearning4j-datasets" % "1.0.0-M2.1"
