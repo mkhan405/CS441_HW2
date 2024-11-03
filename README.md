@@ -148,5 +148,34 @@ Each line in the RDD is then split, with their BPE Token ID computed, and joined
 "abc def ghi" => ["abc", "def", "ghi"] => [305, 130, 927] => "305 130 927"
 ```
 
-### Generating Input/Output Target Pairs
+### Generating Input/Target Pairs
+
+To generate the Input/Target Pairs, each line in the tokenized RDD is first split and sliding windows of length `windowLength + 1` with the configured stride are generated. These can be found in the `application.conf` file. 
+
+```
+"305 130 927 ...." => [305, 130, 927, ...] => [[305, 130, 927,...], [130, 927, 425, ...]]
+```
+
+Each of these generated windows is then mapped to generate Input/Output Pairs:
+
+```
+[305, 130, 927,...] => ([305, 130, 927, ..], 234)
+```
+
+In case the length of a window is smaller than the desired window size, they are padded with 0s for the remaining length:
+
+```
+[305, 130, 927,...] => ([305, 130, 927, 0, 0, 0, ..., 0], 234)
+```
+
+In summary, every line from the original `tokenizedRDD` is now transformed to the following:
+
+```
+"305 130 927 ...." => [
+                        ([305, 130, 927, ...], 234),
+                        ....
+                      ]
+```
+
+### Embedding Input Features and Generating Output Features
 
