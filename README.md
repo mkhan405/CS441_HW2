@@ -57,7 +57,7 @@ Datasets (RDDs)** are utilizes to transform the original large corpus of text in
 - Embed Input Features using precomputed embeddings and generate one-hot encoded labels from targets
 - Train Neural Network using DeepLearning4j's `SparkDl4jMultiLayer` Components
 
-### Leading Embeddings and Generating Mappings
+### Loading Embeddings and Generating Mappings
 The precomputed embeddings are in a CSV file in the following format:
 
 ```
@@ -122,4 +122,31 @@ token predicted by the neural network during inference. This will also be genera
     val indexToTokenBroadcast = sparkContext.broadcast(indexToIndexRDD.collectAsMap())
 ```
 
+### Tokenizing Input Data
+Initially, the input text is loaded as an `RDD[String]` by Spark such that each line of the input text is an entry in the RDD:
+
+```
+  inputRDD = {
+    "The materials contained in the...",
+    "Roosevelt, while President of the...",
+    ...
+  }
+```
+
+For the purposes of generating sliding window pairs of sufficient lengths, these entries were transformed such that entry in the RDD
+contains 10 lines of the original text:
+
+```
+  inputRDD = {
+    "<lines 1-10>",
+    "<lines 11-20>",
+    ...
+  }
+```
+Each line in the RDD is then split, with their BPE Token ID computed, and joined back together to obtain the `tokenizedRDD`:
+```
+"abc def ghi" => ["abc", "def", "ghi"] => [305, 130, 927] => "305 130 927"
+```
+
+### Generating Input/Output Target Pairs
 
