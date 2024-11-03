@@ -195,12 +195,22 @@ previously computed and extract a list of inputs and outputs:
 
 #### Embedding Input Features
 
-Each token in the input sequences is mapped to a 128-dimensional embedding vector, with a corresponding vector of zero's in the case the token is not found. These results are then flat mapped and result in a vector of length `windowSize * embeddingDim`
+Each token in the input sequences is mapped to a 128-dimensional embedding vector, with a corresponding vector of zero's in the case the token is not found. To do this, each token ID is first mapped to it's textual representation. Then, each textual representation is mapped to it's embedding vector. These results are then flat mapped and result in a vector of length `windowSize * embeddingDim`
 
 ```
-[305, 130, 927, ...] => [[132.4, ..., 0], [532.4, ..., 0], ... ] => [1.00, 43.0, ...., 423.3]
+[305, 130, 927, ...] => ["abc", "def", "ghi"] => [[132.4, ..., 0], [532.4, ..., 0], ... ] => [1.00, 43.0, ...., 423.3]
 ```
 
 #### Generating Output Features
+
+Similar to the process of embedding the input features, the token ID is first decoded to it's textual representation, and the index of the token is then retrieved using the mapping 
+computed prior to this process:
+
+```
+234 => "def" => 1 => [0, 1, 0, ....]
+```
+
+The index is then used to generate a one-hot encoded label of size `vocabSize`, where the position with `1` indicates which token has been predicted. In this example, "def" is the second
+item in the vocabulary, hence why the label has a 1 at index 1. 
 
 
