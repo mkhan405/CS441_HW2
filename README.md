@@ -41,7 +41,7 @@ If you are interested in running the programming via the CLI, you can perform th
 - Run the following command in the terminal: `sbt clean compile run`
 
 ## Video Discussion Link
-Youtube: https://youtu.be/jtpDMff2-yk
+Youtube: [https://youtu.be/jtpDMff2-yk](https://youtu.be/UDNEH81zwJg)
 
 
 ## Project Implementation
