@@ -4,7 +4,20 @@ ThisBuild / scalaVersion := "2.12.18"
 
 Compile/mainClass := Some("com.khan.spark.main")
 
-val isProd: Boolean = sys.props.getOrElse("prod", "false").toBoolean
+val environments = Map(
+  "dev" -> Map(
+    "prod" -> "false",
+    "spark.master" -> "local[*]"
+  ),
+  "prod" -> Map(
+    "prod" -> "true",
+    "spark.master" -> "yarn"
+  )
+)
+
+val env = sys.props.getOrElse("env", "dev")
+val envProps = environments(env)
+val isProd: Boolean = envProps.getOrElse("prod", "false").toBoolean
 
 lazy val root = (project in file("."))
   .settings(
@@ -13,6 +26,7 @@ lazy val root = (project in file("."))
   )
 
 ThisBuild / assemblyMergeStrategy := {
+  case PathList("META-INF", "services", serviceFile) if serviceFile.contains("org.nd4j") => MergeStrategy.concat
   case PathList("META-INF", "services", xs@_*) => MergeStrategy.filterDistinctLines
   case PathList("META-INF", xs@_*) => MergeStrategy.discard
   case "application.conf" => MergeStrategy.concat

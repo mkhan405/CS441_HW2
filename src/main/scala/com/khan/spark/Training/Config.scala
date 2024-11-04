@@ -6,7 +6,7 @@ case class SparkTrainingConfig(numWorkers: Int, batchSize: Int, avgFreq: Int, nu
        numEpochs: Int, learningRate: Double, hiddenLayerSize: Int, seed: Int)
 case class FileConfig(inputTextPath: String, embeddingFilePath: String, baseDir: String, outputFilePath: String)
 case class AppConfig(windowSize: Int, stride: Int, embeddingDim: Int, padToken: String, vocabSize: Long,
-   sparkTrainingConfig: SparkTrainingConfig, fileConfig: FileConfig)
+   lineGrouping: Int, sparkTrainingConfig: SparkTrainingConfig, fileConfig: FileConfig)
 
 object AppConfig {
   private val config: Config = ConfigFactory.load()
@@ -37,6 +37,7 @@ object AppConfig {
       embeddingDim = config.getInt("app.embeddingDim"),
       vocabSize = config.getLong("app.vocabSize"),
       sparkTrainingConfig = sparkTrainingConfig,
-      fileConfig = fileConfig)
+      fileConfig = fileConfig,
+      lineGrouping = config.getInt("app.lineGrouping"))
   }
 }

@@ -1,44 +1,33 @@
 package com.khan.spark.utils
 
-import com.khan.spark.SlidingWindows.Compute.logger
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.SparkContext
 
-import java.io.FileNotFoundException
 import java.net.URI
-import javax.annotation.Nullable
 
 object io {
   private val config: Config = ConfigFactory.load().resolve()
   val isProd: Boolean = sys.props.getOrElse("prod", "false").toBoolean
 
-  @Nullable
-  def getResourcePath(path: String): String = {
-    try {
-      if (!isProd) {
-        getClass.getResource(path).toString
-      } else {
-        val s3URI = config.getString("resources.s3URI")
-        s3URI + path
-      }
-    } catch {
-      case e: NullPointerException => null
-    }
-  }
-
-  def getFilePath(filename: String): String = {
-    // Read Input Text from File
-    val inputFilename = s"/${filename}"
-    val inputFilePath = getResourcePath(inputFilename)
-
-    if (inputFilePath == null) {
-      logger.error(s"File: ${inputFilePath} cannot be opened")
-      throw new FileNotFoundException(s"File not found: ${inputFilePath}")
-    }
-    inputFilePath
-  }
-
+  /**
+   * Configures the file system for reading and writing data in a Spark application based on the environment.
+   *
+   * @param sc The SparkContext used to access Spark's configuration and services.
+   * @param baseDir The base directory URI (either local or S3) where files are stored or read from.
+   *
+   * @return A FileSystem instance configured according to the environment.
+   *         If the application is running in a production environment, it configures
+   *         the file system to use Amazon S3 with appropriate settings. Otherwise, it
+   *         defaults to the local file system.
+   *
+   * This function first retrieves the Hadoop configuration from the provided SparkContext.
+   * If the `isProd` flag is true, it sets the necessary Hadoop configuration properties
+   * to interact with Amazon S3, including the implementation class and AWS credentials provider.
+   * It then constructs a URI from the base directory and returns a FileSystem instance
+   * configured for S3 access. If the application is not in production, it simply returns
+   * the default FileSystem based on the Hadoop configuration.
+   */
   def configureFileSystem(sc: SparkContext, baseDir: String): FileSystem = {
     // Get Hadoop configuration from Spark context
     val hadoopConfig = sc.hadoopConfiguration

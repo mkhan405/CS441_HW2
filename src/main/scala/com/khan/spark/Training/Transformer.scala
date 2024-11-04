@@ -27,6 +27,21 @@ import scala.collection.Map
 object Transformer {
   val logger: Logger = LoggerFactory.getLogger("Transformer")
 
+  /**
+   * Constructs a multi-layer neural network model based on the provided application configuration.
+   *
+   * @param config The configuration object containing model parameters such as embedding dimensions,
+   *               window size, vocabulary size, and training configurations.
+   * @return A fully initialized MultiLayerNetwork model ready for training.
+   *
+   * This method performs the following tasks:
+   * - Retrieves necessary configuration parameters including embedding size, window size, vocabulary size,
+   *   and hidden layer size.
+   * - Builds the neural network architecture using a sequence of layers:
+   *   - A dense layer with ReLU activation for hidden representations.
+   *   - An output layer using softmax activation for multi-class classification, configured with cross-entropy loss.
+   * - Initializes the model's parameters and returns the constructed model.
+   */
   private def buildModel(config: AppConfig) = {
     // Retrieve configuration params
     val embeddingSize = config.embeddingDim
@@ -60,6 +75,23 @@ object Transformer {
     model
   }
 
+  /**
+   * Trains a multi-layer neural network model using a distributed Spark framework.
+   *
+   * @param sc The SparkContext for managing the Spark cluster.
+   * @param fs The FileSystem interface for saving the trained model.
+   * @param config The configuration object containing application parameters such as training settings and file paths.
+   * @param dataset The RDD containing the dataset used for training the model.
+   * @return The trained MultiLayerNetwork model after completing the training process.
+   *
+   * This method performs the following steps:
+   * - Builds a neural network model based on the provided configuration.
+   * - Configures the training process using parameter averaging and sets up a SparkDl4jMultiLayer instance.
+   * - Splits the dataset into training and testing subsets.
+   * - Trains the model over a specified number of epochs, logging training statistics and performance metrics.
+   * - Evaluates the model on the test dataset and logs accuracy and confusion matrix details.
+   * - Saves the trained model to the specified output path upon completion.
+   */
   def train(sc: SparkContext, fs: FileSystem, config: AppConfig, dataset: RDD[DataSet]): MultiLayerNetwork = {
     val model: MultiLayerNetwork = buildModel(config)
     val modelParams = config.sparkTrainingConfig
@@ -102,6 +134,9 @@ object Transformer {
         })
       }
 
+      // Report Spark Statistics
+      logger.info(s"Number of Executors: ${sc.getExecutorMemoryStatus.size}")
+
       // Log learning rate
       logger.info(s"Learning Rate: ${sparkModel.getNetwork.getLearningRate(0)}")
 
@@ -126,14 +161,41 @@ object Transformer {
     sparkModel.getNetwork
   }
 
-  def predict(model: MultiLayerNetwork, query: String, config: AppConfig,
-      tokenToEmbeddingBroadcast: Broadcast[Map[String, Array[Float]]],
-      indexToTokenBroadcast:  Broadcast[Map[Long, String]]): String = {
+  /**
+   * Tokenizes an input query string and ensures that it meets a fixed length requirement by padding or truncating.
+   *
+   * @param query The input query string to be tokenized.
+   * @param config The configuration object containing parameters such as `windowSize` and `padToken` for padding.
+   * @return An array of tokenized strings with a fixed length of `config.windowSize`.
+   *         If the number of tokens in the query exceeds `config.windowSize`, the array is truncated.
+   *         If the number of tokens is less than `config.windowSize`, the array is padded with the `padToken` to meet the required length.
+   */
+  def tokenizeQuery(query: String, config: AppConfig): Array[String] = {
     // Split and tokenize query
     val tokenizedQuery = splitAndTokenize(query).split(" ")
     // Consider maximum number of tokens by window, or pad the remaining space with the configured padToken
-    val input = if (tokenizedQuery.length > 20) tokenizedQuery.slice(0, 20) else (tokenizedQuery ++
+    if (tokenizedQuery.length > 20)
+      tokenizedQuery.slice(0, 20)
+    else (tokenizedQuery ++
       Array.fill(config.windowSize - tokenizedQuery.length)(config.padToken))
+  }
+
+  /**
+   * Generates a prediction from a trained multi-layer neural network model based on a tokenized input query.
+   *
+   * @param model The trained MultiLayerNetwork model used for making predictions.
+   * @param query The input query string to be tokenized and processed for prediction.
+   * @param config The configuration object containing parameters such as `embeddingDim` and `windowSize`.
+   * @param tokenToEmbeddingBroadcast A broadcast variable mapping tokens to their corresponding embeddings.
+   * @param indexToTokenBroadcast A broadcast variable mapping token indices to their original string representation.
+   * @return The predicted output token as a string. If the predicted token index is not found in the mapping,
+   *         "NULL" is returned.
+   */
+  def predict(model: MultiLayerNetwork, query: String, config: AppConfig,
+      tokenToEmbeddingBroadcast: Broadcast[Map[String, Array[Float]]],
+      indexToTokenBroadcast:  Broadcast[Map[Long, String]]): String = {
+
+    val input = tokenizeQuery(query, config)
     // Verify tokenized and truncated/padded input
     logger.debug(s"Text Input: ${input.mkString("Array(", ", ", ")")}")
     val modelInput = generateEmbedding(input, tokenToEmbeddingBroadcast, config.embeddingDim).reshape(1,

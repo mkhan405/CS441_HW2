@@ -5,9 +5,7 @@ import com.khan.spark.SlidingWindows.Compute._
 import com.khan.spark.Embeddings.EmbeddingLoader._
 import com.khan.spark.Training.Transformer._
 import com.khan.spark.utils.io.configureFileSystem
-import com.typesafe.config.ConfigFactory
 import org.apache.spark._
-import org.nd4j.linalg.factory.Nd4j
 import org.slf4j.{Logger, LoggerFactory}
 
 import org.apache.hadoop.fs.FileSystem
@@ -24,20 +22,22 @@ object Driver {
     val logger: Logger = LoggerFactory.getLogger("Driver")
     logger.info("Driver Started...")
 
-    val (tokenToEmbeddingRDD, embeddingToTokenRDD, indexToIndexRDD, tokenToIndexRDD) =
+    val (tokenToEmbeddingRDD, indexToIndexRDD, tokenToIndexRDD) =
       loadEmbeddings(sparkContext, config)
 
     logger.info("Embedding RDD Computed")
-    // Report Spark Statistics
-    logger.info(s"Number of Executors: ${sparkContext.getExecutorMemoryStatus.size}")
 
     val tokenToEmbeddingBroadcast = sparkContext.broadcast(tokenToEmbeddingRDD.collectAsMap())
     val indexToTokenBroadcast = sparkContext.broadcast(indexToIndexRDD.collectAsMap())
     val dataset = computeSlidingWindows(sparkContext, config, tokenToIndexRDD, tokenToEmbeddingBroadcast)
     val model = train(sparkContext, fs, config, dataset)
 
-    val output = predict(model, "serve power", config, tokenToEmbeddingBroadcast, indexToTokenBroadcast)
-    logger.debug(s"Prediction Output: ${output}")
+    val attempts = Array("express power", "since war", "free situation")
+    attempts.foreach(input => {
+      val output = predict(model, input, config, tokenToEmbeddingBroadcast, indexToTokenBroadcast)
+      logger.debug(s"Input: ${input}, Prediction Output: ${output}")
+    })
+
     sparkContext.stop()
   }
 }
