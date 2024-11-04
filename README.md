@@ -222,18 +222,37 @@ The neural network comprises of the following layers:
 
 The hidden layer utilizes the RELU activation function while the output layer uses the SOFTMAX Activation Function. The Multi-Class Cross Entropy Loss Function is utilized on the output layer.
 
-The `ParameterAveragingTrainingMastger` by DeepLearning4j is utilized to train and fit the model in a distributed fashion. Here are some of the relevant configuration parameters for training:
-- Batch Size: 10
-- Epochs: 50
-- Learning Rate: 0.01
-- Hidden Layer Size: 128
-- Number of Workers: 32
-- Average Frequency: 10
-- Vocabulary Size: 1034
-
 ### Model Performance
 
-To train and effectively test the model, an 80/20 split was performed to generate a train and test dataset to evaluate the model performance for every epoch. Below are some of the relevant statistics
-regarding the model performance:
+The `ParameterAveragingTrainingMastger` by DeepLearning4j is utilized to train and fit the model in a distributed fashion. The system was tested locally, and due to processing and memory constraints,
+the following parameters were applied:
+- Batch Size: 10
+- Epochs: 20
+- Learning Rate: 0.01
+- Hidden Layer Size: 20
+- Number of Workers: 32
+- Average Frequency: 10
+- Vocabulary Size: 50
 
+To train and effectively test the model, an 80/20 split was performed to generate a train and test dataset to evaluate the model performance for every epoch. Here are some of the relevant statistics
+from the model training:
+
+- Training Loss: 0
+  - This may be attributed to the small dataset the model was fit on, indicating that model perhaps overfit
+- Training Accuracy: 0
+  - This may further confirm overfitting, since the model is not able to correctly predict for data outside it's training set
+- Gradient Norms: Between 0.38575756549835205 and 0.6663835644721985
+  - Indicates model is not impeded by vanishing or exploding gradients
+- Learning Rate: Consistently stays at configured 0.01 learning rate
+- Memory Usage: 100 - 300 MB
+
+  This can be seen from the logs, where it shows how many bytes of the heap memory are used  
+  ```
+  17:35:46.287 [main] INFO Transformer -- Used Heap Memory: 324449
+  17:35:46.287 [main] INFO Transformer -- Total Heap Memory: 2282540236
+  17:35:46.287 [main] INFO Transformer -- Used Off-Heap Memory: 0
+  17:35:46.287 [main] INFO Transformer -- Total Off-Heap Memory: 0
+  ```
+- Time Per Epoch: 600ms on Average
+- CPU Utilization: 40-58%
 
